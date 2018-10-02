@@ -47,7 +47,6 @@ type Driver struct {
 	SSHKeyPair        string
 	CIDRList          []string
 	FirewallRuleIds   []string
-	Expunge           bool
 	Template          string
 	TemplateID        string
 	ServiceOffering   string
@@ -250,7 +249,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.JobTimeOut = int64(flags.Int("pcextreme-timeout"))
 	d.SSHUser = flags.String("pcextreme-ssh-user")
 	d.CIDRList = flags.StringSlice("pcextreme-cidr")
-	d.Expunge = flags.Bool("pcextreme-expunge")
 	d.Tags = flags.StringSlice("pcextreme-resource-tag")
 	d.DeleteVolumes = flags.Bool("pcextreme-delete-volumes")
 	d.DiskSize = flags.Int("pcextreme-disk-size")
@@ -432,7 +430,6 @@ func (d *Driver) Create() error {
 func (d *Driver) Remove() error {
 	cs := d.getClient()
 	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.Id)
-	p.SetExpunge(d.Expunge)
 	if err := d.deleteFirewallRules(); err != nil {
 		return err
 	}
