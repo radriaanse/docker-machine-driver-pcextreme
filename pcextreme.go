@@ -38,38 +38,35 @@ func (e *configError) Error() string {
 
 type Driver struct {
 	*drivers.BaseDriver
-	Id                   string
-	ApiURL               string
-	ApiKey               string
-	SecretKey            string
-	HTTPGETOnly          bool
-	JobTimeOut           int64
-	PublicIP             string
-	PublicIPID           string
-	DisassociatePublicIP bool
-	SSHKeyPair           string
-	CIDRList             []string
-	FirewallRuleIds      []string
-	Expunge              bool
-	Template             string
-	TemplateID           string
-	ServiceOffering      string
-	ServiceOfferingID    string
-	DeleteVolumes        bool
-	DiskOffering         string
-	DiskOfferingID       string
-	DiskSize             int
-	Network              string
-	NetworkID            string
-	Zone                 string
-	ZoneID               string
-	NetworkType          string
-	UserDataFile         string
-	UserData             string
-	Project              string
-	ProjectID            string
-	Tags                 []string
-	DisplayName          string
+	Id                string
+	ApiURL            string
+	ApiKey            string
+	SecretKey         string
+	HTTPGETOnly       bool
+	JobTimeOut        int64
+	SSHKeyPair        string
+	CIDRList          []string
+	FirewallRuleIds   []string
+	Expunge           bool
+	Template          string
+	TemplateID        string
+	ServiceOffering   string
+	ServiceOfferingID string
+	DeleteVolumes     bool
+	DiskOffering      string
+	DiskOfferingID    string
+	DiskSize          int
+	Network           string
+	NetworkID         string
+	Zone              string
+	ZoneID            string
+	NetworkType       string
+	UserDataFile      string
+	UserData          string
+	Project           string
+	ProjectID         string
+	Tags              []string
+	DisplayName       string
 }
 
 type UserDataYAML struct {
@@ -275,9 +272,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	if err := d.setNetwork(flags.String("pcextreme-network"), flags.String("pcextreme-network-id")); err != nil {
 		return err
 	}
-	if err := d.setPublicIP(flags.String("pcextreme-public-ip")); err != nil {
-		return err
-	}
 	if err := d.setUserData(flags.String("pcextreme-userdata-file")); err != nil {
 		return err
 	}
@@ -309,7 +303,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	if len(d.CIDRList) == 0 {
 		d.CIDRList = []string{"0.0.0.0/0"}
 	}
-	d.DisassociatePublicIP = false
 	return nil
 }
 
@@ -325,7 +318,7 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetIP returns the IP that this host is available at
 func (d *Driver) GetIP() (string, error) {
-	return d.PublicIP, nil
+	return d.IPAddress, nil
 }
 
 // GetState returns the state that the host is in (running, stopped, etc)
@@ -420,11 +413,6 @@ func (d *Driver) Create() error {
 	}
 	d.Id = vm.Id
 	if d.NetworkType == "Advanced" {
-		if d.PublicIPID == "" {
-			if err := d.associatePublicIP(); err != nil {
-				return err
-			}
-		}
 		if err := d.configureFirewallRules(); err != nil {
 			return err
 		}
@@ -446,9 +434,6 @@ func (d *Driver) Remove() error {
 	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.Id)
 	p.SetExpunge(d.Expunge)
 	if err := d.deleteFirewallRules(); err != nil {
-		return err
-	}
-	if err := d.disassociatePublicIP(); err != nil {
 		return err
 	}
 	if err := d.deleteKeyPair(); err != nil {
@@ -702,32 +687,6 @@ func (d *Driver) setNetwork(networkName string, networkID string) error {
 
 	log.Debugf("network id: %q", d.NetworkID)
 	log.Debugf("network name: %q", d.Network)
-
-	return nil
-}
-
-func (d *Driver) setPublicIP(publicip string) error {
-	d.PublicIP = publicip
-	d.PublicIPID = ""
-
-	if d.PublicIP == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	p := cs.Address.NewListPublicIpAddressesParams()
-	p.SetIpaddress(d.PublicIP)
-	ips, err := cs.Address.ListPublicIpAddresses(p)
-	if err != nil {
-		return fmt.Errorf("Unable to get public ip id: %s", err)
-	}
-	if ips.Count < 1 {
-		return fmt.Errorf("Unable to get public ip id: Not Found %s", d.PublicIP)
-	}
-
-	d.PublicIPID = ips.PublicIpAddresses[0].Id
-
-	log.Debugf("public ip id: %q", d.PublicIPID)
 
 	return nil
 }
@@ -1044,54 +1003,7 @@ func (d *Driver) deleteVolumes() error {
 	return nil
 }
 
-func (d *Driver) associatePublicIP() error {
-	cs := d.getClient()
-	log.Infof("Associating public ip address...")
-	p := cs.Address.NewAssociateIpAddressParams()
-	p.SetZoneid(d.ZoneID)
-	if d.NetworkID != "" {
-		p.SetNetworkid(d.NetworkID)
-	}
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
-	ip, err := cs.Address.AssociateIpAddress(p)
-	if err != nil {
-		return err
-	}
-	d.PublicIP = ip.Ipaddress
-	d.PublicIPID = ip.Id
-	d.DisassociatePublicIP = true
-
-	return nil
-}
-
-func (d *Driver) disassociatePublicIP() error {
-	if !d.DisassociatePublicIP {
-		return nil
-	}
-
-	cs := d.getClient()
-	log.Infof("Disassociating public ip address...")
-	p := cs.Address.NewDisassociateIpAddressParams(d.PublicIPID)
-	if _, err := cs.Address.DisassociateIpAddress(p); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) enableStaticNat() error {
-	cs := d.getClient()
-	log.Infof("Enabling Static Nat...")
-	p := cs.NAT.NewEnableStaticNatParams(d.PublicIPID, d.Id)
-	if _, err := cs.NAT.EnableStaticNat(p); err != nil {
-		return err
-	}
-
-	return nil
-}
-
+// TODO: get ID of d.IPaddress
 func (d *Driver) configureFirewallRule(publicPort, privatePort int) error {
 	cs := d.getClient()
 
@@ -1109,20 +1021,6 @@ func (d *Driver) configureFirewallRule(publicPort, privatePort int) error {
 		}
 	} else {
 		d.FirewallRuleIds = append(d.FirewallRuleIds, rule.Id)
-	}
-
-	return nil
-}
-
-func (d *Driver) configurePortForwardingRule(publicPort, privatePort int) error {
-	cs := d.getClient()
-
-	log.Debugf("Creating port forwarding rule ... : cidr list: %v, port %d", d.CIDRList, publicPort)
-	p := cs.Firewall.NewCreatePortForwardingRuleParams(
-		d.PublicIPID, privatePort, "tcp", publicPort, d.Id)
-	p.SetOpenfirewall(false)
-	if _, err := cs.Firewall.CreatePortForwardingRule(p); err != nil {
-		return err
 	}
 
 	return nil
@@ -1161,28 +1059,6 @@ func (d *Driver) deleteFirewallRules() error {
 			}
 		}
 	}
-	return nil
-}
-
-func (d *Driver) configurePortForwardingRules() error {
-	log.Info("Creating port forwarding rule for ssh port ...")
-
-	if err := d.configurePortForwardingRule(22, 22); err != nil {
-		return err
-	}
-
-	log.Info("Creating port forwarding rule for docker port ...")
-	if err := d.configurePortForwardingRule(dockerPort, dockerPort); err != nil {
-		return err
-	}
-
-	if d.SwarmMaster {
-		log.Info("Creating port forwarding rule for swarm port ...")
-		if err := d.configurePortForwardingRule(swarmPort, swarmPort); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
