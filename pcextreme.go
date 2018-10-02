@@ -44,13 +44,11 @@ type Driver struct {
 	SecretKey            string
 	HTTPGETOnly          bool
 	JobTimeOut           int64
-	UsePrivateIP         bool
 	UsePortForward       bool
 	PublicIP             string
 	PublicIPID           string
 	DisassociatePublicIP bool
 	SSHKeyPair           string
-	PrivateIP            string
 	CIDRList             []string
 	FirewallRuleIds      []string
 	Expunge              bool
@@ -252,7 +250,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.ApiURL = flags.String("pcextreme-api-url")
 	d.ApiKey = flags.String("pcextreme-api-key")
 	d.SecretKey = flags.String("pcextreme-secret-key")
-	d.UsePrivateIP = flags.Bool("pcextreme-use-private-address")
 	d.UsePortForward = flags.Bool("pcextreme-use-port-forward")
 	d.HTTPGETOnly = flags.Bool("pcextreme-http-get-only")
 	d.JobTimeOut = int64(flags.Int("pcextreme-timeout"))
@@ -330,9 +327,6 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetIP returns the IP that this host is available at
 func (d *Driver) GetIP() (string, error) {
-	if d.UsePrivateIP {
-		return d.PrivateIP, nil
-	}
 	return d.PublicIP, nil
 }
 
@@ -427,11 +421,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 	d.Id = vm.Id
-	d.PrivateIP = vm.Nic[0].Ipaddress
-	if d.NetworkType == "Basic" {
-		d.PublicIP = d.PrivateIP
-	}
-	if d.NetworkType == "Advanced" && !d.UsePrivateIP {
+	if d.NetworkType == "Advanced" {
 		if d.PublicIPID == "" {
 			if err := d.associatePublicIP(); err != nil {
 				return err
@@ -456,7 +446,7 @@ func (d *Driver) Create() error {
 		}
 	}
 
-	d.IPAddress = d.PrivateIP
+	d.IPAddress = vm.Nic[0].Ipaddress
 
 	return nil
 }
