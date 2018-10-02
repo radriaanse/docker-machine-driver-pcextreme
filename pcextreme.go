@@ -102,18 +102,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			EnvVar: "pcextreme_TIMEOUT",
 			Value:  300,
 		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-use-private-address",
-			Usage: "Use a private IP to access the machine",
-		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-use-port-forward",
-			Usage: "Use port forwarding rule to access the machine",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-public-ip",
-			Usage: "pcextreme Public IP",
-		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-ssh-user",
 			Usage:  "pcextreme SSH user",
@@ -123,10 +111,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringSliceFlag{
 			Name:  "pcextreme-cidr",
 			Usage: "Source CIDR to give access to the machine. default 0.0.0.0/0",
-		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-expunge",
-			Usage: "Whether or not to expunge the machine upon removal",
 		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-template",
@@ -147,15 +131,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage: "pcextreme service offering id",
 		},
 		mcnflag.StringFlag{
-			Name:   "pcextreme-network",
-			Usage:  "pcextreme network",
-			EnvVar: "pcextreme_NETWORK",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-network-id",
-			Usage: "pcextreme network id",
-		},
-		mcnflag.StringFlag{
 			Name:   "pcextreme-zone",
 			Usage:  "pcextreme zone",
 			EnvVar: "pcextreme_ZONE",
@@ -168,14 +143,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "pcextreme-userdata-file",
 			Usage:  "pcextreme Userdata file",
 			EnvVar: "pcextreme_USERDATA_FILE",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-project",
-			Usage: "pcextreme project",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-project-id",
-			Usage: "pcextreme project id",
 		},
 		mcnflag.StringSliceFlag{
 			Name:  "pcextreme-resource-tag",
