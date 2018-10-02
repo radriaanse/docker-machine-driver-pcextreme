@@ -46,7 +46,6 @@ type Driver struct {
 	JobTimeOut        int64
 	SSHKeyPair        string
 	CIDRList          []string
-	FirewallRuleIds   []string
 	Template          string
 	TemplateID        string
 	ServiceOffering   string
@@ -55,11 +54,8 @@ type Driver struct {
 	DiskOffering      string
 	DiskOfferingID    string
 	DiskSize          int
-	Network           string
-	NetworkID         string
 	Zone              string
 	ZoneID            string
-	NetworkType       string
 	UserDataFile      string
 	UserData          string
 	Project           string
@@ -218,7 +214,6 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
-		FirewallRuleIds: []string{},
 	}
 	return driver
 }
@@ -265,9 +260,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 		return err
 	}
 	if err := d.setServiceOffering(flags.String("pcextreme-service-offering"), flags.String("pcextreme-service-offering-id")); err != nil {
-		return err
-	}
-	if err := d.setNetwork(flags.String("pcextreme-network"), flags.String("pcextreme-network-id")); err != nil {
 		return err
 	}
 	if err := d.setUserData(flags.String("pcextreme-userdata-file")); err != nil {
@@ -386,9 +378,6 @@ func (d *Driver) Create() error {
 	if d.UserData != "" {
 		p.SetUserdata(d.UserData)
 	}
-	if d.NetworkID != "" {
-		p.SetNetworkids([]string{d.NetworkID})
-	}
 	if d.ProjectID != "" {
 		p.SetProjectid(d.ProjectID)
 	}
@@ -398,23 +387,16 @@ func (d *Driver) Create() error {
 			p.SetSize(int64(d.DiskSize))
 		}
 	}
-	if d.NetworkType == "Basic" {
-		if err := d.createSecurityGroup(); err != nil {
-			return err
-		}
-		p.SetSecuritygroupnames([]string{d.MachineName})
+	if err := d.createSecurityGroup(); err != nil {
+		return err
 	}
+	p.SetSecuritygroupnames([]string{d.MachineName})
 	log.Info("Creating CloudStack instance...")
 	vm, err := cs.VirtualMachine.DeployVirtualMachine(p)
 	if err != nil {
 		return err
 	}
 	d.Id = vm.Id
-	if d.NetworkType == "Advanced" {
-		if err := d.configureFirewallRules(); err != nil {
-			return err
-		}
-	}
 	if len(d.Tags) > 0 {
 		if err := d.createTags(); err != nil {
 			return err
@@ -430,9 +412,6 @@ func (d *Driver) Create() error {
 func (d *Driver) Remove() error {
 	cs := d.getClient()
 	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.Id)
-	if err := d.deleteFirewallRules(); err != nil {
-		return err
-	}
 	if err := d.deleteKeyPair(); err != nil {
 		return err
 	}
@@ -440,10 +419,8 @@ func (d *Driver) Remove() error {
 	if _, err := cs.VirtualMachine.DestroyVirtualMachine(p); err != nil {
 		return err
 	}
-	if d.NetworkType == "Basic" {
-		if err := d.deleteSecurityGroup(); err != nil {
-			return err
-		}
+	if err := d.deleteSecurityGroup(); err != nil {
+		return err
 	}
 	if d.DeleteVolumes {
 		if err := d.deleteVolumes(); err != nil {
@@ -538,7 +515,6 @@ func (d *Driver) getClient() *cloudstack.CloudStackClient {
 func (d *Driver) setZone(zone string, zoneID string) error {
 	d.Zone = zone
 	d.ZoneID = zoneID
-	d.NetworkType = ""
 
 	if d.Zone == "" && d.ZoneID == "" {
 		return nil
@@ -559,11 +535,9 @@ func (d *Driver) setZone(zone string, zoneID string) error {
 
 	d.Zone = z.Name
 	d.ZoneID = z.Id
-	d.NetworkType = z.Networktype
 
 	log.Debugf("zone: %q", d.Zone)
 	log.Debugf("zone id: %q", d.ZoneID)
-	log.Debugf("network type: %q", d.NetworkType)
 
 	return nil
 }
@@ -655,35 +629,6 @@ func (d *Driver) setDiskOffering(diskOffering string, diskOfferingID string) err
 
 	log.Debugf("disk offering id: %q", d.DiskOfferingID)
 	log.Debugf("disk offering name: %q", d.DiskOffering)
-
-	return nil
-}
-
-func (d *Driver) setNetwork(networkName string, networkID string) error {
-	d.Network = networkName
-	d.NetworkID = networkID
-
-	if d.Network == "" && d.NetworkID == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	var network *cloudstack.Network
-	var err error
-	if d.NetworkID != "" {
-		network, _, err = cs.Network.GetNetworkByID(d.NetworkID, d.setParams)
-	} else {
-		network, _, err = cs.Network.GetNetworkByName(d.Network, d.setParams)
-	}
-	if err != nil {
-		return fmt.Errorf("Unable to get network: %v", err)
-	}
-
-	d.NetworkID = network.Id
-	d.Network = network.Name
-
-	log.Debugf("network id: %q", d.NetworkID)
-	log.Debugf("network name: %q", d.Network)
 
 	return nil
 }
@@ -995,65 +940,6 @@ func (d *Driver) deleteVolumes() error {
 		_, err = cs.Volume.DeleteVolume(cs.Volume.NewDeleteVolumeParams(v.Id))
 		if err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// TODO: get ID of d.IPaddress
-func (d *Driver) configureFirewallRule(publicPort, privatePort int) error {
-	cs := d.getClient()
-
-	log.Debugf("Creating firewall rule ... : cidr list: %v, port %d", d.CIDRList, publicPort)
-	p := cs.Firewall.NewCreateFirewallRuleParams(d.PublicIPID, "tcp")
-	p.SetCidrlist(d.CIDRList)
-	p.SetStartport(publicPort)
-	p.SetEndport(publicPort)
-	rule, err := cs.Firewall.CreateFirewallRule(p)
-	if err != nil {
-		// If the error reports the port is already open, just ignore.
-		if !strings.Contains(err.Error(), fmt.Sprintf(
-			"The range specified, %d-%d, conflicts with rule", publicPort, publicPort)) {
-			return err
-		}
-	} else {
-		d.FirewallRuleIds = append(d.FirewallRuleIds, rule.Id)
-	}
-
-	return nil
-}
-
-func (d *Driver) configureFirewallRules() error {
-	log.Info("Creating firewall rule for ssh port ...")
-
-	if err := d.configureFirewallRule(22, 22); err != nil {
-		return err
-	}
-
-	log.Info("Creating firewall rule for docker port ...")
-	if err := d.configureFirewallRule(dockerPort, dockerPort); err != nil {
-		return err
-	}
-
-	if d.SwarmMaster {
-		log.Info("Creating firewall rule for swarm port ...")
-		if err := d.configureFirewallRule(swarmPort, swarmPort); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d *Driver) deleteFirewallRules() error {
-	if len(d.FirewallRuleIds) > 0 {
-		log.Info("Removing firewall rules...")
-		for _, id := range d.FirewallRuleIds {
-			cs := d.getClient()
-			f := cs.Firewall.NewDeleteFirewallRuleParams(id)
-			if _, err := cs.Firewall.DeleteFirewallRule(f); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
