@@ -38,41 +38,28 @@ func (e *configError) Error() string {
 
 type Driver struct {
 	*drivers.BaseDriver
-	Id                   string
-	ApiURL               string
-	ApiKey               string
-	SecretKey            string
-	HTTPGETOnly          bool
-	JobTimeOut           int64
-	UsePrivateIP         bool
-	UsePortForward       bool
-	PublicIP             string
-	PublicIPID           string
-	DisassociatePublicIP bool
-	SSHKeyPair           string
-	PrivateIP            string
-	CIDRList             []string
-	FirewallRuleIds      []string
-	Expunge              bool
-	Template             string
-	TemplateID           string
-	ServiceOffering      string
-	ServiceOfferingID    string
-	DeleteVolumes        bool
-	DiskOffering         string
-	DiskOfferingID       string
-	DiskSize             int
-	Network              string
-	NetworkID            string
-	Zone                 string
-	ZoneID               string
-	NetworkType          string
-	UserDataFile         string
-	UserData             string
-	Project              string
-	ProjectID            string
-	Tags                 []string
-	DisplayName          string
+	Id                string
+	ApiURL            string
+	ApiKey            string
+	SecretKey         string
+	HTTPGETOnly       bool
+	JobTimeOut        int64
+	SSHKeyPair        string
+	CIDRList          []string
+	Template          string
+	TemplateID        string
+	ServiceOffering   string
+	ServiceOfferingID string
+	DeleteVolumes     bool
+	DiskOffering      string
+	DiskOfferingID    string
+	DiskSize          int
+	Zone              string
+	ZoneID            string
+	UserDataFile      string
+	UserData          string
+	Tags              []string
+	DisplayName       string
 }
 
 type UserDataYAML struct {
@@ -115,18 +102,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			EnvVar: "pcextreme_TIMEOUT",
 			Value:  300,
 		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-use-private-address",
-			Usage: "Use a private IP to access the machine",
-		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-use-port-forward",
-			Usage: "Use port forwarding rule to access the machine",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-public-ip",
-			Usage: "pcextreme Public IP",
-		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-ssh-user",
 			Usage:  "pcextreme SSH user",
@@ -136,10 +111,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringSliceFlag{
 			Name:  "pcextreme-cidr",
 			Usage: "Source CIDR to give access to the machine. default 0.0.0.0/0",
-		},
-		mcnflag.BoolFlag{
-			Name:  "pcextreme-expunge",
-			Usage: "Whether or not to expunge the machine upon removal",
 		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-template",
@@ -160,15 +131,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage: "pcextreme service offering id",
 		},
 		mcnflag.StringFlag{
-			Name:   "pcextreme-network",
-			Usage:  "pcextreme network",
-			EnvVar: "pcextreme_NETWORK",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-network-id",
-			Usage: "pcextreme network id",
-		},
-		mcnflag.StringFlag{
 			Name:   "pcextreme-zone",
 			Usage:  "pcextreme zone",
 			EnvVar: "pcextreme_ZONE",
@@ -181,14 +143,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "pcextreme-userdata-file",
 			Usage:  "pcextreme Userdata file",
 			EnvVar: "pcextreme_USERDATA_FILE",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-project",
-			Usage: "pcextreme project",
-		},
-		mcnflag.StringFlag{
-			Name:  "pcextreme-project-id",
-			Usage: "pcextreme project id",
 		},
 		mcnflag.StringSliceFlag{
 			Name:  "pcextreme-resource-tag",
@@ -225,7 +179,6 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
-		FirewallRuleIds: []string{},
 	}
 	return driver
 }
@@ -252,22 +205,16 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.ApiURL = flags.String("pcextreme-api-url")
 	d.ApiKey = flags.String("pcextreme-api-key")
 	d.SecretKey = flags.String("pcextreme-secret-key")
-	d.UsePrivateIP = flags.Bool("pcextreme-use-private-address")
-	d.UsePortForward = flags.Bool("pcextreme-use-port-forward")
 	d.HTTPGETOnly = flags.Bool("pcextreme-http-get-only")
 	d.JobTimeOut = int64(flags.Int("pcextreme-timeout"))
 	d.SSHUser = flags.String("pcextreme-ssh-user")
 	d.CIDRList = flags.StringSlice("pcextreme-cidr")
-	d.Expunge = flags.Bool("pcextreme-expunge")
 	d.Tags = flags.StringSlice("pcextreme-resource-tag")
 	d.DeleteVolumes = flags.Bool("pcextreme-delete-volumes")
 	d.DiskSize = flags.Int("pcextreme-disk-size")
 	d.DisplayName = flags.String("pcextreme-displayname")
 	d.SwarmMaster = flags.Bool("swarm-master")
 	d.SwarmDiscovery = flags.String("swarm-discovery")
-	if err := d.setProject(flags.String("pcextreme-project"), flags.String("pcextreme-project-id")); err != nil {
-		return err
-	}
 	if err := d.setZone(flags.String("pcextreme-zone"), flags.String("pcextreme-zone-id")); err != nil {
 		return err
 	}
@@ -275,12 +222,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 		return err
 	}
 	if err := d.setServiceOffering(flags.String("pcextreme-service-offering"), flags.String("pcextreme-service-offering-id")); err != nil {
-		return err
-	}
-	if err := d.setNetwork(flags.String("pcextreme-network"), flags.String("pcextreme-network-id")); err != nil {
-		return err
-	}
-	if err := d.setPublicIP(flags.String("pcextreme-public-ip")); err != nil {
 		return err
 	}
 	if err := d.setUserData(flags.String("pcextreme-userdata-file")); err != nil {
@@ -314,7 +255,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	if len(d.CIDRList) == 0 {
 		d.CIDRList = []string{"0.0.0.0/0"}
 	}
-	d.DisassociatePublicIP = false
 	return nil
 }
 
@@ -330,10 +270,7 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetIP returns the IP that this host is available at
 func (d *Driver) GetIP() (string, error) {
-	if d.UsePrivateIP {
-		return d.PrivateIP, nil
-	}
-	return d.PublicIP, nil
+	return d.IPAddress, nil
 }
 
 // GetState returns the state that the host is in (running, stopped, etc)
@@ -403,60 +340,29 @@ func (d *Driver) Create() error {
 	if d.UserData != "" {
 		p.SetUserdata(d.UserData)
 	}
-	if d.NetworkID != "" {
-		p.SetNetworkids([]string{d.NetworkID})
-	}
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	if d.DiskOfferingID != "" {
 		p.SetDiskofferingid(d.DiskOfferingID)
 		if d.DiskSize != 0 {
 			p.SetSize(int64(d.DiskSize))
 		}
 	}
-	if d.NetworkType == "Basic" {
-		if err := d.createSecurityGroup(); err != nil {
-			return err
-		}
-		p.SetSecuritygroupnames([]string{d.MachineName})
+	if err := d.createSecurityGroup(); err != nil {
+		return err
 	}
+	p.SetSecuritygroupnames([]string{d.MachineName})
 	log.Info("Creating CloudStack instance...")
 	vm, err := cs.VirtualMachine.DeployVirtualMachine(p)
 	if err != nil {
 		return err
 	}
 	d.Id = vm.Id
-	d.PrivateIP = vm.Nic[0].Ipaddress
-	if d.NetworkType == "Basic" {
-		d.PublicIP = d.PrivateIP
-	}
-	if d.NetworkType == "Advanced" && !d.UsePrivateIP {
-		if d.PublicIPID == "" {
-			if err := d.associatePublicIP(); err != nil {
-				return err
-			}
-		}
-		if err := d.configureFirewallRules(); err != nil {
-			return err
-		}
-		if d.UsePortForward {
-			if err := d.configurePortForwardingRules(); err != nil {
-				return err
-			}
-		} else {
-			if err := d.enableStaticNat(); err != nil {
-				return err
-			}
-		}
-	}
 	if len(d.Tags) > 0 {
 		if err := d.createTags(); err != nil {
 			return err
 		}
 	}
 
-	d.IPAddress = d.PrivateIP
+	d.IPAddress = vm.Nic[0].Ipaddress
 
 	return nil
 }
@@ -465,13 +371,6 @@ func (d *Driver) Create() error {
 func (d *Driver) Remove() error {
 	cs := d.getClient()
 	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.Id)
-	p.SetExpunge(d.Expunge)
-	if err := d.deleteFirewallRules(); err != nil {
-		return err
-	}
-	if err := d.disassociatePublicIP(); err != nil {
-		return err
-	}
 	if err := d.deleteKeyPair(); err != nil {
 		return err
 	}
@@ -479,10 +378,8 @@ func (d *Driver) Remove() error {
 	if _, err := cs.VirtualMachine.DestroyVirtualMachine(p); err != nil {
 		return err
 	}
-	if d.NetworkType == "Basic" {
-		if err := d.deleteSecurityGroup(); err != nil {
-			return err
-		}
+	if err := d.deleteSecurityGroup(); err != nil {
+		return err
 	}
 	if d.DeleteVolumes {
 		if err := d.deleteVolumes(); err != nil {
@@ -577,7 +474,6 @@ func (d *Driver) getClient() *cloudstack.CloudStackClient {
 func (d *Driver) setZone(zone string, zoneID string) error {
 	d.Zone = zone
 	d.ZoneID = zoneID
-	d.NetworkType = ""
 
 	if d.Zone == "" && d.ZoneID == "" {
 		return nil
@@ -598,11 +494,9 @@ func (d *Driver) setZone(zone string, zoneID string) error {
 
 	d.Zone = z.Name
 	d.ZoneID = z.Id
-	d.NetworkType = z.Networktype
 
 	log.Debugf("zone: %q", d.Zone)
 	log.Debugf("zone id: %q", d.ZoneID)
-	log.Debugf("network type: %q", d.NetworkType)
 
 	return nil
 }
@@ -698,61 +592,6 @@ func (d *Driver) setDiskOffering(diskOffering string, diskOfferingID string) err
 	return nil
 }
 
-func (d *Driver) setNetwork(networkName string, networkID string) error {
-	d.Network = networkName
-	d.NetworkID = networkID
-
-	if d.Network == "" && d.NetworkID == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	var network *cloudstack.Network
-	var err error
-	if d.NetworkID != "" {
-		network, _, err = cs.Network.GetNetworkByID(d.NetworkID, d.setParams)
-	} else {
-		network, _, err = cs.Network.GetNetworkByName(d.Network, d.setParams)
-	}
-	if err != nil {
-		return fmt.Errorf("Unable to get network: %v", err)
-	}
-
-	d.NetworkID = network.Id
-	d.Network = network.Name
-
-	log.Debugf("network id: %q", d.NetworkID)
-	log.Debugf("network name: %q", d.Network)
-
-	return nil
-}
-
-func (d *Driver) setPublicIP(publicip string) error {
-	d.PublicIP = publicip
-	d.PublicIPID = ""
-
-	if d.PublicIP == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	p := cs.Address.NewListPublicIpAddressesParams()
-	p.SetIpaddress(d.PublicIP)
-	ips, err := cs.Address.ListPublicIpAddresses(p)
-	if err != nil {
-		return fmt.Errorf("Unable to get public ip id: %s", err)
-	}
-	if ips.Count < 1 {
-		return fmt.Errorf("Unable to get public ip id: Not Found %s", d.PublicIP)
-	}
-
-	d.PublicIPID = ips.PublicIpAddresses[0].Id
-
-	log.Debugf("public ip id: %q", d.PublicIPID)
-
-	return nil
-}
-
 func (d *Driver) setUserData(userDataFile string) error {
 	var data []byte
 	var err error
@@ -795,43 +634,11 @@ func (d *Driver) readUserDataFromURL(userDataURL string) ([]byte, error) {
 
 }
 
-func (d *Driver) setProject(projectName string, projectID string) error {
-	d.Project = projectName
-	d.ProjectID = projectID
-
-	if d.Project == "" && d.ProjectID == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	var p *cloudstack.Project
-	var err error
-	if d.ProjectID != "" {
-		p, _, err = cs.Project.GetProjectByID(d.ProjectID)
-	} else {
-		p, _, err = cs.Project.GetProjectByName(d.Project)
-	}
-	if err != nil {
-		return fmt.Errorf("Invalid project: %s", err)
-	}
-
-	d.ProjectID = p.Id
-	d.Project = p.Name
-
-	log.Debugf("project id: %s", d.ProjectID)
-	log.Debugf("project name: %s", d.Project)
-
-	return nil
-}
-
 func (d *Driver) checkKeyPairByName() error {
 	cs := d.getClient()
 	log.Infof("Checking if SSH key pair (%v) already exists...", d.SSHKeyPair)
 	p := cs.SSH.NewListSSHKeyPairsParams()
 	p.SetName(d.SSHKeyPair)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.SSH.ListSSHKeyPairs(p)
 	if err != nil {
 		return err
@@ -889,9 +696,6 @@ func (d *Driver) checkKeyPairByFingerprint(pubKey string) (bool, error) {
 	log.Infof("Checking for matching public key fingerprints...", d.SSHKeyPair)
 	p := cs.SSH.NewListSSHKeyPairsParams()
 	p.SetFingerprint(fp)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.SSH.ListSSHKeyPairs(p)
 	if err != nil {
 		return false, err
@@ -917,9 +721,6 @@ func (d *Driver) checkInstance() error {
 	p := cs.VirtualMachine.NewListVirtualMachinesParams()
 	p.SetName(d.MachineName)
 	p.SetZoneid(d.ZoneID)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.VirtualMachine.ListVirtualMachines(p)
 	if err != nil {
 		return err
@@ -985,9 +786,6 @@ func (d *Driver) createKeyPair() error {
 	if !exists {
 		log.Infof("Registering SSH key pair %s", d.SSHKeyPair)
 		p := cs.SSH.NewRegisterSSHKeyPairParams(d.SSHKeyPair, string(publicKey))
-		if d.ProjectID != "" {
-			p.SetProjectid(d.ProjectID)
-		}
 		if _, err := cs.SSH.RegisterSSHKeyPair(p); err != nil {
 			return err
 		}
@@ -1019,9 +817,6 @@ func (d *Driver) deleteKeyPair() error {
 	}
 
 	p := cs.SSH.NewDeleteSSHKeyPairParams(d.SSHKeyPair)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 
 	if _, err := cs.SSH.DeleteSSHKeyPair(p); err != nil {
 		// Throw away the error because it most likely means that a key doesn't exist
@@ -1040,9 +835,6 @@ func (d *Driver) deleteVolumes() error {
 
 	p := cs.Volume.NewListVolumesParams()
 	p.SetVirtualmachineid(d.Id)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	volResponse, err := cs.Volume.ListVolumes(p)
 	if err != nil {
 		return err
@@ -1065,156 +857,11 @@ func (d *Driver) deleteVolumes() error {
 	return nil
 }
 
-func (d *Driver) associatePublicIP() error {
-	cs := d.getClient()
-	log.Infof("Associating public ip address...")
-	p := cs.Address.NewAssociateIpAddressParams()
-	p.SetZoneid(d.ZoneID)
-	if d.NetworkID != "" {
-		p.SetNetworkid(d.NetworkID)
-	}
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
-	ip, err := cs.Address.AssociateIpAddress(p)
-	if err != nil {
-		return err
-	}
-	d.PublicIP = ip.Ipaddress
-	d.PublicIPID = ip.Id
-	d.DisassociatePublicIP = true
-
-	return nil
-}
-
-func (d *Driver) disassociatePublicIP() error {
-	if !d.DisassociatePublicIP {
-		return nil
-	}
-
-	cs := d.getClient()
-	log.Infof("Disassociating public ip address...")
-	p := cs.Address.NewDisassociateIpAddressParams(d.PublicIPID)
-	if _, err := cs.Address.DisassociateIpAddress(p); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) enableStaticNat() error {
-	cs := d.getClient()
-	log.Infof("Enabling Static Nat...")
-	p := cs.NAT.NewEnableStaticNatParams(d.PublicIPID, d.Id)
-	if _, err := cs.NAT.EnableStaticNat(p); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) configureFirewallRule(publicPort, privatePort int) error {
-	cs := d.getClient()
-
-	log.Debugf("Creating firewall rule ... : cidr list: %v, port %d", d.CIDRList, publicPort)
-	p := cs.Firewall.NewCreateFirewallRuleParams(d.PublicIPID, "tcp")
-	p.SetCidrlist(d.CIDRList)
-	p.SetStartport(publicPort)
-	p.SetEndport(publicPort)
-	rule, err := cs.Firewall.CreateFirewallRule(p)
-	if err != nil {
-		// If the error reports the port is already open, just ignore.
-		if !strings.Contains(err.Error(), fmt.Sprintf(
-			"The range specified, %d-%d, conflicts with rule", publicPort, publicPort)) {
-			return err
-		}
-	} else {
-		d.FirewallRuleIds = append(d.FirewallRuleIds, rule.Id)
-	}
-
-	return nil
-}
-
-func (d *Driver) configurePortForwardingRule(publicPort, privatePort int) error {
-	cs := d.getClient()
-
-	log.Debugf("Creating port forwarding rule ... : cidr list: %v, port %d", d.CIDRList, publicPort)
-	p := cs.Firewall.NewCreatePortForwardingRuleParams(
-		d.PublicIPID, privatePort, "tcp", publicPort, d.Id)
-	p.SetOpenfirewall(false)
-	if _, err := cs.Firewall.CreatePortForwardingRule(p); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) configureFirewallRules() error {
-	log.Info("Creating firewall rule for ssh port ...")
-
-	if err := d.configureFirewallRule(22, 22); err != nil {
-		return err
-	}
-
-	log.Info("Creating firewall rule for docker port ...")
-	if err := d.configureFirewallRule(dockerPort, dockerPort); err != nil {
-		return err
-	}
-
-	if d.SwarmMaster {
-		log.Info("Creating firewall rule for swarm port ...")
-		if err := d.configureFirewallRule(swarmPort, swarmPort); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d *Driver) deleteFirewallRules() error {
-	if len(d.FirewallRuleIds) > 0 {
-		log.Info("Removing firewall rules...")
-		for _, id := range d.FirewallRuleIds {
-			cs := d.getClient()
-			f := cs.Firewall.NewDeleteFirewallRuleParams(id)
-			if _, err := cs.Firewall.DeleteFirewallRule(f); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (d *Driver) configurePortForwardingRules() error {
-	log.Info("Creating port forwarding rule for ssh port ...")
-
-	if err := d.configurePortForwardingRule(22, 22); err != nil {
-		return err
-	}
-
-	log.Info("Creating port forwarding rule for docker port ...")
-	if err := d.configurePortForwardingRule(dockerPort, dockerPort); err != nil {
-		return err
-	}
-
-	if d.SwarmMaster {
-		log.Info("Creating port forwarding rule for swarm port ...")
-		if err := d.configurePortForwardingRule(swarmPort, swarmPort); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (d *Driver) createSecurityGroup() error {
 	log.Debugf("Creating security group ...")
 	cs := d.getClient()
 
 	p1 := cs.SecurityGroup.NewCreateSecurityGroupParams(d.MachineName)
-	if d.ProjectID != "" {
-		p1.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.CreateSecurityGroup(p1); err != nil {
 		return err
 	}
@@ -1226,9 +873,6 @@ func (d *Driver) createSecurityGroup() error {
 
 	p2.SetStartport(22)
 	p2.SetEndport(22)
-	if d.ProjectID != "" {
-		p2.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.AuthorizeSecurityGroupIngress(p2); err != nil {
 		return err
 	}
@@ -1255,9 +899,6 @@ func (d *Driver) deleteSecurityGroup() error {
 
 	p := cs.SecurityGroup.NewDeleteSecurityGroupParams()
 	p.SetName(d.MachineName)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.DeleteSecurityGroup(p); err != nil {
 		return err
 	}
@@ -1281,11 +922,6 @@ func (d *Driver) createTags() error {
 }
 
 func (d *Driver) setParams(c *cloudstack.CloudStackClient, p interface{}) error {
-	if o, ok := p.(interface {
-		SetProjectid(string)
-	}); ok && d.ProjectID != "" {
-		o.SetProjectid(d.ProjectID)
-	}
 	if o, ok := p.(interface {
 		SetZoneid(string)
 	}); ok && d.ZoneID != "" {
