@@ -44,7 +44,6 @@ type Driver struct {
 	SecretKey            string
 	HTTPGETOnly          bool
 	JobTimeOut           int64
-	UsePortForward       bool
 	PublicIP             string
 	PublicIPID           string
 	DisassociatePublicIP bool
@@ -250,7 +249,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.ApiURL = flags.String("pcextreme-api-url")
 	d.ApiKey = flags.String("pcextreme-api-key")
 	d.SecretKey = flags.String("pcextreme-secret-key")
-	d.UsePortForward = flags.Bool("pcextreme-use-port-forward")
 	d.HTTPGETOnly = flags.Bool("pcextreme-http-get-only")
 	d.JobTimeOut = int64(flags.Int("pcextreme-timeout"))
 	d.SSHUser = flags.String("pcextreme-ssh-user")
@@ -429,15 +427,6 @@ func (d *Driver) Create() error {
 		}
 		if err := d.configureFirewallRules(); err != nil {
 			return err
-		}
-		if d.UsePortForward {
-			if err := d.configurePortForwardingRules(); err != nil {
-				return err
-			}
-		} else {
-			if err := d.enableStaticNat(); err != nil {
-				return err
-			}
 		}
 	}
 	if len(d.Tags) > 0 {
