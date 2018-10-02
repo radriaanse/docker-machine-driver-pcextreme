@@ -270,6 +270,7 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetIP returns the IP that this host is available at
 func (d *Driver) GetIP() (string, error) {
+	return d.IPAddress, nil
 }
 
 // GetState returns the state that the host is in (running, stopped, etc)
@@ -345,6 +346,10 @@ func (d *Driver) Create() error {
 			p.SetSize(int64(d.DiskSize))
 		}
 	}
+	if err := d.createSecurityGroup(); err != nil {
+		return err
+	}
+	p.SetSecuritygroupnames([]string{d.MachineName})
 	log.Info("Creating CloudStack instance...")
 	vm, err := cs.VirtualMachine.DeployVirtualMachine(p)
 	if err != nil {
@@ -356,6 +361,8 @@ func (d *Driver) Create() error {
 			return err
 		}
 	}
+
+	d.IPAddress = vm.Nic[0].Ipaddress
 
 	return nil
 }
@@ -371,6 +378,8 @@ func (d *Driver) Remove() error {
 	if _, err := cs.VirtualMachine.DestroyVirtualMachine(p); err != nil {
 		return err
 	}
+	if err := d.deleteSecurityGroup(); err != nil {
+		return err
 	}
 	if d.DeleteVolumes {
 		if err := d.deleteVolumes(); err != nil {
@@ -485,6 +494,9 @@ func (d *Driver) setZone(zone string, zoneID string) error {
 
 	d.Zone = z.Name
 	d.ZoneID = z.Id
+
+	log.Debugf("zone: %q", d.Zone)
+	log.Debugf("zone id: %q", d.ZoneID)
 
 	return nil
 }
