@@ -58,8 +58,6 @@ type Driver struct {
 	ZoneID            string
 	UserDataFile      string
 	UserData          string
-	Project           string
-	ProjectID         string
 	Tags              []string
 	DisplayName       string
 }
@@ -250,9 +248,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.DisplayName = flags.String("pcextreme-displayname")
 	d.SwarmMaster = flags.Bool("swarm-master")
 	d.SwarmDiscovery = flags.String("swarm-discovery")
-	if err := d.setProject(flags.String("pcextreme-project"), flags.String("pcextreme-project-id")); err != nil {
-		return err
-	}
 	if err := d.setZone(flags.String("pcextreme-zone"), flags.String("pcextreme-zone-id")); err != nil {
 		return err
 	}
@@ -377,9 +372,6 @@ func (d *Driver) Create() error {
 	p.SetKeypair(d.SSHKeyPair)
 	if d.UserData != "" {
 		p.SetUserdata(d.UserData)
-	}
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
 	}
 	if d.DiskOfferingID != "" {
 		p.SetDiskofferingid(d.DiskOfferingID)
@@ -675,43 +667,11 @@ func (d *Driver) readUserDataFromURL(userDataURL string) ([]byte, error) {
 
 }
 
-func (d *Driver) setProject(projectName string, projectID string) error {
-	d.Project = projectName
-	d.ProjectID = projectID
-
-	if d.Project == "" && d.ProjectID == "" {
-		return nil
-	}
-
-	cs := d.getClient()
-	var p *cloudstack.Project
-	var err error
-	if d.ProjectID != "" {
-		p, _, err = cs.Project.GetProjectByID(d.ProjectID)
-	} else {
-		p, _, err = cs.Project.GetProjectByName(d.Project)
-	}
-	if err != nil {
-		return fmt.Errorf("Invalid project: %s", err)
-	}
-
-	d.ProjectID = p.Id
-	d.Project = p.Name
-
-	log.Debugf("project id: %s", d.ProjectID)
-	log.Debugf("project name: %s", d.Project)
-
-	return nil
-}
-
 func (d *Driver) checkKeyPairByName() error {
 	cs := d.getClient()
 	log.Infof("Checking if SSH key pair (%v) already exists...", d.SSHKeyPair)
 	p := cs.SSH.NewListSSHKeyPairsParams()
 	p.SetName(d.SSHKeyPair)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.SSH.ListSSHKeyPairs(p)
 	if err != nil {
 		return err
@@ -769,9 +729,6 @@ func (d *Driver) checkKeyPairByFingerprint(pubKey string) (bool, error) {
 	log.Infof("Checking for matching public key fingerprints...", d.SSHKeyPair)
 	p := cs.SSH.NewListSSHKeyPairsParams()
 	p.SetFingerprint(fp)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.SSH.ListSSHKeyPairs(p)
 	if err != nil {
 		return false, err
@@ -797,9 +754,6 @@ func (d *Driver) checkInstance() error {
 	p := cs.VirtualMachine.NewListVirtualMachinesParams()
 	p.SetName(d.MachineName)
 	p.SetZoneid(d.ZoneID)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	res, err := cs.VirtualMachine.ListVirtualMachines(p)
 	if err != nil {
 		return err
@@ -865,9 +819,6 @@ func (d *Driver) createKeyPair() error {
 	if !exists {
 		log.Infof("Registering SSH key pair %s", d.SSHKeyPair)
 		p := cs.SSH.NewRegisterSSHKeyPairParams(d.SSHKeyPair, string(publicKey))
-		if d.ProjectID != "" {
-			p.SetProjectid(d.ProjectID)
-		}
 		if _, err := cs.SSH.RegisterSSHKeyPair(p); err != nil {
 			return err
 		}
@@ -899,9 +850,6 @@ func (d *Driver) deleteKeyPair() error {
 	}
 
 	p := cs.SSH.NewDeleteSSHKeyPairParams(d.SSHKeyPair)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 
 	if _, err := cs.SSH.DeleteSSHKeyPair(p); err != nil {
 		// Throw away the error because it most likely means that a key doesn't exist
@@ -920,9 +868,6 @@ func (d *Driver) deleteVolumes() error {
 
 	p := cs.Volume.NewListVolumesParams()
 	p.SetVirtualmachineid(d.Id)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	volResponse, err := cs.Volume.ListVolumes(p)
 	if err != nil {
 		return err
@@ -950,9 +895,6 @@ func (d *Driver) createSecurityGroup() error {
 	cs := d.getClient()
 
 	p1 := cs.SecurityGroup.NewCreateSecurityGroupParams(d.MachineName)
-	if d.ProjectID != "" {
-		p1.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.CreateSecurityGroup(p1); err != nil {
 		return err
 	}
@@ -964,9 +906,6 @@ func (d *Driver) createSecurityGroup() error {
 
 	p2.SetStartport(22)
 	p2.SetEndport(22)
-	if d.ProjectID != "" {
-		p2.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.AuthorizeSecurityGroupIngress(p2); err != nil {
 		return err
 	}
@@ -993,9 +932,6 @@ func (d *Driver) deleteSecurityGroup() error {
 
 	p := cs.SecurityGroup.NewDeleteSecurityGroupParams()
 	p.SetName(d.MachineName)
-	if d.ProjectID != "" {
-		p.SetProjectid(d.ProjectID)
-	}
 	if _, err := cs.SecurityGroup.DeleteSecurityGroup(p); err != nil {
 		return err
 	}
@@ -1019,11 +955,6 @@ func (d *Driver) createTags() error {
 }
 
 func (d *Driver) setParams(c *cloudstack.CloudStackClient, p interface{}) error {
-	if o, ok := p.(interface {
-		SetProjectid(string)
-	}); ok && d.ProjectID != "" {
-		o.SetProjectid(d.ProjectID)
-	}
 	if o, ok := p.(interface {
 		SetZoneid(string)
 	}); ok && d.ZoneID != "" {
