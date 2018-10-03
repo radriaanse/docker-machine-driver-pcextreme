@@ -20,13 +20,22 @@ import (
 )
 
 const (
-	driverName   = "pcextreme"
-	dockerPort   = 2376
-	swarmPort    = 3376
-	diskDatadisk = "DATADISK"
+	driverName             = "pcextreme"
+	defaultAPIURL          = "https://api.auroracompute.eu/" + defaultZone
+	defaultZone            = "ams"
+	defaultServiceOffering = "Agile 2G"
+	defaultDiskOffering    = "20 GB"
+	defaultTemplate        = "CoreOS Stable"
+	defaultSSHUser         = "core"
+	defaultAsyncJobTimeout = 300
+	diskDataType           = "DATADISK"
 )
 
-var keyExists bool
+var (
+	dockerPort = 2376
+	swarmPort  = 3376
+	keyExists  bool
+)
 
 type configError struct {
 	option string
@@ -36,11 +45,12 @@ func (e *configError) Error() string {
 	return fmt.Sprintf("PCextreme driver requires the --pcextreme-%s option", e.option)
 }
 
+// Driver implements the libmachine/drivers.Driver interface
 type Driver struct {
 	*drivers.BaseDriver
-	Id                string
-	ApiURL            string
-	ApiKey            string
+	ID                string
+	APIURL            string
+	APIKey            string
 	SecretKey         string
 	HTTPGETOnly       bool
 	JobTimeOut        int64
@@ -62,13 +72,11 @@ type Driver struct {
 	DisplayName       string
 }
 
-type UserDataYAML struct {
+type userDataYAML struct {
 	SSHAuthorizedKeys []string `yaml:"ssh_authorized_keys,omitempty"`
 	SSHKeys           struct {
 		RSAPrivate string `yaml:"rsa_private,omitempty"`
-		DSAPrivate string `yaml:"dsa_private,omitempty"`
 		RSAPublic  string `yaml:"rsa_public,omitempty"`
-		DSAPublic  string `yaml:"dsa_public,omitempty"`
 	} `yaml:"ssh_keys,omitempty"`
 }
 
@@ -99,13 +107,13 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.IntFlag{
 			Name:   "pcextreme-timeout",
 			Usage:  "time(seconds) allowed to complete async job",
+			Value:  defaultAsyncJobTimeout,
 			EnvVar: "pcextreme_TIMEOUT",
-			Value:  300,
 		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-ssh-user",
 			Usage:  "pcextreme SSH user",
-			Value:  "root",
+			Value:  defaultSSHUser,
 			EnvVar: "pcextreme_SSH_USER",
 		},
 		mcnflag.StringSliceFlag{
@@ -115,6 +123,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-template",
 			Usage:  "pcextreme template",
+			Value:  defaultTemplate,
 			EnvVar: "pcextreme_TEMPLATE",
 		},
 		mcnflag.StringFlag{
@@ -124,6 +133,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-service-offering",
 			Usage:  "pcextreme service offering",
+			Value:  defaultServiceOffering,
 			EnvVar: "pcextreme_SERVICE_OFFERING",
 		},
 		mcnflag.StringFlag{
@@ -133,6 +143,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-zone",
 			Usage:  "pcextreme zone",
+			Value:  defaultZone,
 			EnvVar: "pcextreme_ZONE",
 		},
 		mcnflag.StringFlag{
@@ -151,6 +162,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-disk-offering",
 			Usage:  "pcextreme disk offering",
+			Value:  defaultDiskOffering,
 			EnvVar: "pcextreme_DISK_OFFERING",
 		},
 		mcnflag.StringFlag{
@@ -173,6 +185,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	}
 }
 
+// NewDriver creates the driver with it's specified config
 func NewDriver(hostName, storePath string) drivers.Driver {
 	driver := &Driver{
 		BaseDriver: &drivers.BaseDriver{
@@ -188,22 +201,21 @@ func (d *Driver) DriverName() string {
 	return driverName
 }
 
+// GetSSHHostname returns a hostname used for connecting via SSH
 func (d *Driver) GetSSHHostname() (string, error) {
 	return d.GetIP()
 }
 
+// GetSSHUsername returns an username used for connecting via SSH
 func (d *Driver) GetSSHUsername() string {
-	if d.SSHUser == "" {
-		d.SSHUser = "root"
-	}
 	return d.SSHUser
 }
 
 // SetConfigFromFlags configures the driver with the object that was returned
 // by RegisterCreateFlags
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	d.ApiURL = flags.String("pcextreme-api-url")
-	d.ApiKey = flags.String("pcextreme-api-key")
+	d.APIURL = flags.String("pcextreme-api-url")
+	d.APIKey = flags.String("pcextreme-api-key")
 	d.SecretKey = flags.String("pcextreme-secret-key")
 	d.HTTPGETOnly = flags.Bool("pcextreme-http-get-only")
 	d.JobTimeOut = int64(flags.Int("pcextreme-timeout"))
@@ -234,10 +246,10 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 		d.DisplayName = d.MachineName
 	}
 	d.SSHKeyPair = d.MachineName
-	if d.ApiURL == "" {
+	if d.APIURL == "" {
 		return &configError{option: "api-url"}
 	}
-	if d.ApiKey == "" {
+	if d.APIKey == "" {
 		return &configError{option: "api-key"}
 	}
 	if d.SecretKey == "" {
@@ -276,7 +288,7 @@ func (d *Driver) GetIP() (string, error) {
 // GetState returns the state that the host is in (running, stopped, etc)
 func (d *Driver) GetState() (state.State, error) {
 	cs := d.getClient()
-	vm, count, err := cs.VirtualMachine.GetVirtualMachineByID(d.Id, d.setParams)
+	vm, count, err := cs.VirtualMachine.GetVirtualMachineByID(d.ID, d.setParams)
 	if err != nil {
 		return state.Error, err
 	}
@@ -311,7 +323,7 @@ func (d *Driver) GetState() (state.State, error) {
 	return state.None, nil
 }
 
-// PreCreate allows for pre-create operations to make sure a driver is ready for creation
+// PreCreateCheck allows for pre-create operations to make sure a driver is ready for creation
 func (d *Driver) PreCreateCheck() error {
 	if err := d.checkKeyPairByName(); err != nil {
 		return err
@@ -355,7 +367,7 @@ func (d *Driver) Create() error {
 	if err != nil {
 		return err
 	}
-	d.Id = vm.Id
+	d.ID = vm.Id
 	if len(d.Tags) > 0 {
 		if err := d.createTags(); err != nil {
 			return err
@@ -370,7 +382,7 @@ func (d *Driver) Create() error {
 // Remove a host
 func (d *Driver) Remove() error {
 	cs := d.getClient()
-	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.Id)
+	p := cs.VirtualMachine.NewDestroyVirtualMachineParams(d.ID)
 	if err := d.deleteKeyPair(); err != nil {
 		return err
 	}
@@ -407,7 +419,7 @@ func (d *Driver) Start() error {
 	}
 
 	cs := d.getClient()
-	p := cs.VirtualMachine.NewStartVirtualMachineParams(d.Id)
+	p := cs.VirtualMachine.NewStartVirtualMachineParams(d.ID)
 
 	if _, err = cs.VirtualMachine.StartVirtualMachine(p); err != nil {
 		return err
@@ -429,7 +441,7 @@ func (d *Driver) Stop() error {
 	}
 
 	cs := d.getClient()
-	p := cs.VirtualMachine.NewStopVirtualMachineParams(d.Id)
+	p := cs.VirtualMachine.NewStopVirtualMachineParams(d.ID)
 
 	if _, err = cs.VirtualMachine.StopVirtualMachine(p); err != nil {
 		return err
@@ -450,7 +462,7 @@ func (d *Driver) Restart() error {
 	}
 
 	cs := d.getClient()
-	p := cs.VirtualMachine.NewRebootVirtualMachineParams(d.Id)
+	p := cs.VirtualMachine.NewRebootVirtualMachineParams(d.ID)
 
 	if _, err = cs.VirtualMachine.RebootVirtualMachine(p); err != nil {
 		return err
@@ -465,7 +477,7 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) getClient() *cloudstack.CloudStackClient {
-	cs := cloudstack.NewAsyncClient(d.ApiURL, d.ApiKey, d.SecretKey, false)
+	cs := cloudstack.NewAsyncClient(d.APIURL, d.APIKey, d.SecretKey, false)
 	cs.HTTPGETOnly = d.HTTPGETOnly
 	cs.AsyncTimeout(d.JobTimeOut)
 	return cs
@@ -726,7 +738,7 @@ func (d *Driver) checkInstance() error {
 		return err
 	}
 	if res.Count > 0 {
-		return fmt.Errorf("Instance (%v) already exists.", d.SSHKeyPair)
+		return fmt.Errorf("Instance (%v) already exists", d.SSHKeyPair)
 	}
 	return nil
 }
@@ -748,7 +760,7 @@ func (d *Driver) createKeyPair() error {
 			return err
 		}
 
-		sshKeyYaml := &UserDataYAML{}
+		sshKeyYaml := &userDataYAML{}
 
 		if err != nil {
 			return err
@@ -834,13 +846,13 @@ func (d *Driver) deleteVolumes() error {
 	log.Info("Deleting volumes...")
 
 	p := cs.Volume.NewListVolumesParams()
-	p.SetVirtualmachineid(d.Id)
+	p.SetVirtualmachineid(d.ID)
 	volResponse, err := cs.Volume.ListVolumes(p)
 	if err != nil {
 		return err
 	}
 	for _, v := range volResponse.Volumes {
-		if v.Type != diskDatadisk {
+		if v.Type != diskDataType {
 			continue
 		}
 		p := cs.Volume.NewDetachVolumeParams()
@@ -916,7 +928,7 @@ func (d *Driver) createTags() error {
 		}
 		tags[parts[0]] = parts[1]
 	}
-	params := cs.Resourcetags.NewCreateTagsParams([]string{d.Id}, "UserVm", tags)
+	params := cs.Resourcetags.NewCreateTagsParams([]string{d.ID}, "UserVm", tags)
 	_, err := cs.Resourcetags.CreateTags(params)
 	return err
 }
