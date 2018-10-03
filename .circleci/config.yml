@@ -12,6 +12,8 @@ jobs:
       - run: go get -v -t -d ./...
       - run: go test -v ./...
       - run: CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -installsuffix cgo -o ./artifacts/docker-machine-driver-pcextreme bin/main.go
+      - store_artifacts:
+          path: ./artifacts
   release:
     docker:
       - image: cibuilds/github:0.10
