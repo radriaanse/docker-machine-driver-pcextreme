@@ -1,5 +1,7 @@
 # docker-machine-driver-pcextreme
 
+[![CircleCI](https://circleci.com/gh/radriaanse/docker-machine-driver-pcextreme.svg?style=svg)](https://circleci.com/gh/radriaanse/docker-machine-driver-pcextreme) [![Go Report Card](https://goreportcard.com/badge/github.com/radriaanse/docker-machine-driver-pcextreme)](https://goreportcard.com/report/github.com/radriaanse/docker-machine-driver-pcextreme)
+
 A docker-machine driver for the PCextreme Aurora cloud
 The driver is based on several generic Cloudstack modules as this is what the public API is using.
 
