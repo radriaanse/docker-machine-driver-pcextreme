@@ -33,7 +33,7 @@ workflows:
             branches:
               only:
                 - master
-                - *
+                - /.*/
       - release:
           requires:
             - build
