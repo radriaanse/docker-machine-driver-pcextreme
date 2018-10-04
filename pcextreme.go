@@ -21,10 +21,10 @@ import (
 
 const (
 	driverName             = "pcextreme"
-	defaultAPIURL          = "https://api.auroracompute.eu/" + defaultZone
-	defaultZone            = "ams"
+	defaultAPIEndpoint     = "api.auroracompute.eu"
+	defaultAPIRegion       = "ams"
+	defaultZone            = "zone01.ams02"
 	defaultServiceOffering = "Agile 2G"
-	defaultDiskOffering    = "20 GB"
 	defaultTemplate        = "CoreOS Stable"
 	defaultSSHUser         = "core"
 	defaultAsyncJobTimeout = 300
@@ -49,7 +49,9 @@ func (e *configError) Error() string {
 type Driver struct {
 	*drivers.BaseDriver
 	ID                string
+	APIEndpoint       string
 	APIURL            string
+	APIRegion         string
 	APIKey            string
 	SecretKey         string
 	HTTPGETOnly       bool
@@ -85,9 +87,16 @@ type userDataYAML struct {
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
 		mcnflag.StringFlag{
-			Name:   "pcextreme-api-url",
-			Usage:  "pcextreme API URL",
-			EnvVar: "pcextreme_API_URL",
+			Name:   "pcextreme-api-endpoint",
+			Usage:  "pcextreme API endpoint",
+			Value:  defaultAPIEndpoint,
+			EnvVar: "pcextreme_API_ENDPOINT",
+		},
+		mcnflag.StringFlag{
+			Name:   "pcextreme-api-region",
+			Usage:  "pcextreme API region",
+			Value:  defaultAPIRegion,
+			EnvVar: "pcextreme_API_REGION",
 		},
 		mcnflag.StringFlag{
 			Name:   "pcextreme-api-key",
@@ -162,7 +171,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-disk-offering",
 			Usage:  "pcextreme disk offering",
-			Value:  defaultDiskOffering,
 			EnvVar: "pcextreme_DISK_OFFERING",
 		},
 		mcnflag.StringFlag{
@@ -211,10 +219,24 @@ func (d *Driver) GetSSHUsername() string {
 	return d.SSHUser
 }
 
+func (d *Driver) setAPIURL(apiEndpoint string, apiRegion string) error {
+	d.APIEndpoint = apiEndpoint
+	d.APIRegion = apiRegion
+
+	if d.APIEndpoint != "" && d.APIRegion != "" {
+		d.APIURL = fmt.Sprintf("https://%s/%s", d.APIEndpoint, d.APIRegion)
+	}
+
+	log.Debugf("API: %q", d.APIURL)
+
+	return nil
+}
+
 // SetConfigFromFlags configures the driver with the object that was returned
 // by RegisterCreateFlags
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	d.APIURL = flags.String("pcextreme-api-url")
+	d.APIEndpoint = flags.String("pcextreme-api-endpoint")
+	d.APIRegion = flags.String("pcextreme-api-region")
 	d.APIKey = flags.String("pcextreme-api-key")
 	d.SecretKey = flags.String("pcextreme-secret-key")
 	d.HTTPGETOnly = flags.Bool("pcextreme-http-get-only")
@@ -227,6 +249,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.DisplayName = flags.String("pcextreme-displayname")
 	d.SwarmMaster = flags.Bool("swarm-master")
 	d.SwarmDiscovery = flags.String("swarm-discovery")
+	if err := d.setAPIURL(flags.String("pcextreme-api-endpoint"), flags.String("pcextreme-api-region")); err != nil {
+		return err
+	}
 	if err := d.setZone(flags.String("pcextreme-zone"), flags.String("pcextreme-zone-id")); err != nil {
 		return err
 	}
