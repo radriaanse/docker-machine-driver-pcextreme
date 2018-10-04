@@ -24,7 +24,6 @@ const (
 	defaultAPIURL          = "https://api.auroracompute.eu/" + defaultZone
 	defaultZone            = "ams"
 	defaultServiceOffering = "Agile 2G"
-	defaultDiskOffering    = "20 GB"
 	defaultTemplate        = "CoreOS Stable"
 	defaultSSHUser         = "core"
 	defaultAsyncJobTimeout = 300
@@ -162,7 +161,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:   "pcextreme-disk-offering",
 			Usage:  "pcextreme disk offering",
-			Value:  defaultDiskOffering,
 			EnvVar: "pcextreme_DISK_OFFERING",
 		},
 		mcnflag.StringFlag{
