@@ -21,8 +21,9 @@ import (
 
 const (
 	driverName             = "pcextreme"
-	defaultAPIURL          = "https://api.auroracompute.eu/" + defaultZone
-	defaultZone            = "ams"
+	defaultAPIBaseURL      = "https://api.auroracompute.eu"
+	defaultAPIRegion       = "ams"
+	defaultZone            = "zone01.ams02"
 	defaultServiceOffering = "Agile 2G"
 	defaultTemplate        = "CoreOS Stable"
 	defaultSSHUser         = "core"
@@ -85,7 +86,8 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
 		mcnflag.StringFlag{
 			Name:   "pcextreme-api-url",
-			Usage:  "pcextreme API URL",
+			Usage:  "pcextreme API URL, must contain region",
+			Value:  defaultAPIBaseURL + "/" + defaultAPIRegion,
 			EnvVar: "pcextreme_API_URL",
 		},
 		mcnflag.StringFlag{
